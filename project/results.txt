@@ -1,0 +1,46 @@
+Results:
+
+    model                                                            RMSE
+----------------------------------------------------------------------------
+LinearReg_Normalized                                                4.230825
+LinearRegression_Ridge_Normalized_Alpha=0.0001                      4.231278
+LinearRegression_Ridge_Normalized_Alpha=0.001                       4.231329
+LinearRegression_Ridge_Normalized_Alpha=0.01                        4.231835
+LinearRegression_Ridge_Normalized_Alpha=0.1                         4.236928
+LinearRegression_Ridge_Normalized_Alpha=0.5                         4.260102
+LinearRegression_Ridge_Normalized_Alpha=1                           4.289816
+LinearRegression_Ridge_Alpha=0.0001                                 4.532076
+LinearRegression_Ridge_Alpha=0.001                                  4.532077
+LinearRegression_Ridge_Alpha=0.01                                   4.532095
+LinearRegression_Ridge_Alpha=0.1                                    4.532275
+LinearReg                                                           4.532554
+LinearRegression_Ridge_Alpha=0.5                                    4.533080
+LinearRegression_Ridge_Alpha=1                                      4.534101
+LinearRegression_Ridge_Alpha=10                                     4.554711
+LinearRegression_Ridge_Normalized_Alpha=10                          4.748976
+LinearRegression_Ridge_Alpha=100                                    4.791901
+LinearRegression_Lasso_Normalized_Alpha=0.0001                      5.311903
+LinearRegression_Lasso_Alpha=0.0001                                 5.529481
+LinearRegression_Lasso_Alpha=0.001                                  5.658653
+LinearRegression_Lasso_Normalized_Alpha=0.001                       5.703381
+LinearRegression_Ridge_Alpha=1000                                   5.707946
+LinearRegression_Lasso_Normalized_Alpha=0.01                        5.778170
+LinearRegression_Lasso_Alpha=0.01                                   5.781511
+LinearRegression_Lasso_Alpha=0.1                                    5.830581
+LinearRegression_Lasso_Alpha=1                                      7.097778
+LinearRegression_Lasso_Normalized_Alpha=0.1                         7.110061
+LinearRegression_Ridge_Normalized_Alpha=1000                        7.420919
+LinearRegression_Ridge_Normalized_Alpha=10000                       7.971608
+LinearRegression_Lasso_Alpha=10                                     8.070147
+LinearRegression_Lasso_Normalized_Alpha=10                          8.070147
+LinearRegression_Lasso_Normalized_Alpha=0.5                         8.070147
+LinearRegression_Lasso_Alpha=10000                                  8.070147
+LinearRegression_Lasso_Alpha=100                                    8.070147
+LinearRegression_Lasso_Normalized_Alpha=100                         8.070147
+LinearRegression_Lasso_Alpha=1000                                   8.070147
+LinearRegression_Lasso_Normalized_Alpha=1000                        8.070147
+LinearRegression_Lasso_Normalized_Alpha=1                           8.070147
+LinearRegression_Lasso_Normalized_Alpha=10000                       8.070147
+----------------------------------------------------------------------------
+
+RMSE of test data for best model [LinearReg_Normalized]: 9.618983772492076

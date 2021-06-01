@@ -1,8 +1,7 @@
-# import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
-# pearson's correlation feature selection for numeric input and numeric output
+# Pearson's correlation feature selection for numeric input and numeric output
 from sklearn.feature_selection import f_regression
 from sklearn.feature_selection import SelectKBest
 
@@ -29,8 +28,11 @@ k_best_value = 8000
 ## Learning speed
 alpha_values = [0.0001, 0.001, 0.01, 0.1, 0.5, 1, 10, 100, 1000, 10000]
 
+## Max number of iterations
+max_iters = 100000
+
 # Step 1 - read data set (y with ID and all features - X with ID)
-# Step 2 - grab most useful features using Pearson's correlation coefficient
+# Step 2 - grab most useful features using Pearson's correlation coefficient [future improvement - use a different one?]
 # Step 3 skipped: remove outliers
 # Step 4 - start k-fold cross-validation studying and evaluation. Regression + regularization
 # Step 5 - Test it out and print results!
@@ -90,10 +92,10 @@ models = dict()
 models['LinearReg'] = LinearRegression()
 models['LinearReg_Normalized'] = LinearRegression(normalize=True)
 for a in alpha_values:
-    models['LinearRegression_Ridge_Alpha=' + str(a)] = Ridge(alpha=a)
-    models['LinearRegression_Ridge_Normalized_Alpha=' + str(a)] = Ridge(alpha=a, normalize=True)
-    models['LinearRegression_Lasso_Alpha=' + str(a)] = Lasso(alpha=a)
-    models['LinearRegression_Lasso_Normalized_Alpha=' + str(a)] = Lasso(alpha=a, normalize=True)
+    models['LinearRegression_Ridge_Alpha=' + str(a)] = Ridge(alpha=a, max_iter=max_iters)
+    models['LinearRegression_Ridge_Normalized_Alpha=' + str(a)] = Ridge(alpha=a, max_iter=max_iters, normalize=True)
+    models['LinearRegression_Lasso_Alpha=' + str(a)] = Lasso(alpha=a, max_iter=max_iters)
+    models['LinearRegression_Lasso_Normalized_Alpha=' + str(a)] = Lasso(alpha=a, max_iter=max_iters, normalize=True)
 
 # Create output dataframe
 output_dataframe = pd.DataFrame(columns=['model', 'RMSE'])
@@ -118,20 +120,26 @@ print(output_dataframe)
 ## Step 5 - Run best performing model on test data ##
 #####################################################
 
-# Testing the model
-best_model = models['LinearReg_Normalized'].fit(best_features, gestational_age)
+# Testing all the models
 
-# predict something
+output_dataframe_validation = pd.DataFrame(columns=['model', 'RMSE'])
 testing_data = testing_data.iloc[:, :-6]
-predictions = best_model.predict(scaler.transform(testing_data))
 
-prediction_dataframe = pd.DataFrame(columns=['Predictions'])
-prediction_dataframe.index += 367
-for outcome in predictions:
-    prediction_dataframe.loc[-1] = [outcome]
-    prediction_dataframe.index += 1
+for model in models:
+    models[model].fit(best_features, gestational_age)
+    print(model)
 
-# prediction_dataframe.to_csv('predicted.tsv', sep='\t', index = None)
-# actual_result.to_csv('actual.tsv', sep='\t', index = None)
+    predictions = models[model].predict(scaler.transform(testing_data))
 
-print(np.sqrt(((prediction_dataframe.to_numpy() - actual_result.to_numpy()) ** 2).mean()))
+    prediction_dataframe = pd.DataFrame(columns=['Predictions'])
+    prediction_dataframe.index += 367
+    for outcome in predictions:
+        prediction_dataframe.loc[-1] = [outcome]
+        prediction_dataframe.index += 1
+
+    rmse = np.sqrt(((prediction_dataframe.to_numpy() - actual_result.to_numpy()) ** 2).mean())
+    output_dataframe_validation.loc[-1] = [model] + [rmse]
+    output_dataframe_validation.index += 1
+
+output_dataframe_validation = output_dataframe_validation.sort_values(by=['RMSE'])
+print(output_dataframe_validation)

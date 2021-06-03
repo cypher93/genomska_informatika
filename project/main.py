@@ -23,123 +23,123 @@ RESOURCE_FOLDER = 'resources'
 ## k - in k-fold cross-validation (set to 10)
 
 ## K - in SelectKBest - selecting the most useful features
-k_best_value = 8000
+k_best_values = [10, 50, 100, 300, 500, 1000, 2000, 4000, 8000, 10000, 12000]
 
 ## Learning speed
 alpha_values = [0.0001, 0.001, 0.01, 0.1, 0.5, 1, 10, 100, 1000, 10000]
 
 ## Max number of iterations
-max_iters = 100000
+# Some models may not converge when max_iterations is under this value, but these models aren't best performing anyway
+max_iters = 100000 # 25000 works well too!
 
-# Step 1 - read data set (y with ID and all features - X with ID)
-# Step 2 - grab most useful features using Pearson's correlation coefficient [future improvement - use a different one?]
-# Step 3 skipped: remove outliers
-# Step 4 - start k-fold cross-validation studying and evaluation. Regression + regularization
-# Step 5 - Test it out and print results!
+def read_data():
+    dataframe_cel_data = pd.read_csv(os.path.join(RESOURCE_FOLDER, 'HTA20_RMA.csv'), index_col=0)
 
-########################
-## Let's begin        ##
-## Step 1 - read data ##
-########################
+    gestational_age_data = pd.read_csv(os.path.join(RESOURCE_FOLDER, 'anoSC1_v11_nokey_with_test_samples.csv'))
+    gestational_age_data['original_order'] = gestational_age_data.index.values
 
-dataframe_cel_data = pd.read_csv(os.path.join(RESOURCE_FOLDER, 'HTA20_RMA.csv'), index_col=0)
+    full_dataframe = pd.merge(dataframe_cel_data.T, gestational_age_data, left_on=dataframe_cel_data.T.index.values,
+                            right_on=gestational_age_data.SampleID.values, how='right').sort_values(by='original_order')
 
-gestational_age_data = pd.read_csv(os.path.join(RESOURCE_FOLDER, 'anoSC1_v11_nokey_with_test_samples.csv'))
-gestational_age_data['original_order'] = gestational_age_data.index.values
+    grab_hta_data = full_dataframe['Set'] == 'PRB_HTA'
+    return full_dataframe[grab_hta_data].drop(['Platform'], axis=1).drop(['key_0'], axis=1)
 
-full_dataframe = pd.merge(dataframe_cel_data.T, gestational_age_data, left_on=dataframe_cel_data.T.index.values,
-                          right_on=gestational_age_data.SampleID.values, how='right').sort_values(by='original_order')
+def strip_features(full_dataframe):
+    is_training = full_dataframe['Train'] == 1
+    is_testing = full_dataframe['Train'] == 0
+    training_data = full_dataframe[is_training]
+    testing_data = full_dataframe[is_testing]
 
-grab_hta_data = full_dataframe['Set'] == 'PRB_HTA'
-full_dataframe = full_dataframe[grab_hta_data]
-full_dataframe = full_dataframe.drop(['Platform'], axis=1).drop(['key_0'], axis=1)
+    gestational_age = training_data['GA']
+    actual_result = testing_data['GA']
+    all_features = training_data.iloc[:, :-6] # grab only the features
 
-#############################
-## Step 2 - strip features ##
-#############################
+    return gestational_age, actual_result, testing_data, all_features
 
-is_training = full_dataframe['Train'] == 1
-is_testing = full_dataframe['Train'] == 0
-training_data = full_dataframe[is_training]
-testing_data = full_dataframe[is_testing]
+def select_best_features(all_features, gestational_age, k_best_value):
+    feature_selector = SelectKBest(score_func=f_regression, k=k_best_value)
+    scaler = feature_selector.fit(all_features, gestational_age)
 
-gestational_age = training_data['GA']
-actual_result = testing_data['GA']
+    cols = feature_selector.get_support(indices=True)
 
-all_features = training_data.iloc[:, :-6] # grab only the features
+    if k_best_value == 2000:
+        most_important_features = pd.DataFrame(columns=['Gene', 'Score'])
+        for ind in cols:
+            new_row = {'Gene':all_features.columns[ind], 'Score':feature_selector.scores_[ind]}
+            most_important_features = most_important_features.append(new_row, ignore_index=True)
+        most_important_features.to_csv('most_important_features.csv', sep=',', index = None)
 
-# feature_selector = SelectKBest(score_func=f_regression, k=k_best_value).fit_transform(all_features, gestational_age)
+    return scaler, scaler.transform(all_features)
 
-feature_selector = SelectKBest(score_func=f_regression, k=k_best_value)
-scaler = feature_selector.fit(all_features, gestational_age)
-best_features = scaler.transform(all_features)
+def define_models():
+    models = dict()
 
-# Get columns to keep and create new dataframe with those only
-# cols = feature_selector.get_support(indices=True)
-# selected_features = all_features.iloc[:, cols]
-# print(selected_features)
-# print(selected_features.shape)
-# print(selected_features.columns)
-# selected_features = fs.fit_transform(all_features, gestational_age)
+    models['LinearReg'] = LinearRegression()
+    models['LinearReg_Normalized'] = LinearRegression(normalize=True)
+    for a in alpha_values:
+        models['LinearRegression_Ridge_Alpha=' + str(a)] = Ridge(alpha=a, max_iter=max_iters)
+        models['LinearRegression_Ridge_Normalized_Alpha=' + str(a)] = Ridge(alpha=a, max_iter=max_iters, normalize=True)
+        models['LinearRegression_Lasso_Alpha=' + str(a)] = Lasso(alpha=a, max_iter=max_iters)
+        models['LinearRegression_Lasso_Normalized_Alpha=' + str(a)] = Lasso(alpha=a, max_iter=max_iters, normalize=True)
+    return models
 
-###########################################################################
-## Step 4 - define models, k-fold cross-validate and display performance ##
-###########################################################################
+def evaluate_models(models, best_features, gestational_age, actual_result, all_features, k_best_value):
+    # Create output dataframe
+    output_dataframe = pd.DataFrame(columns=['model', 'RMSE'])
 
-### Define a bunch of models with different parameters
-models = dict()
+    # Train and validate
+    for model in models:
+        # Split data - K-fold cross-validation
+        # random_state gives us the same split every time... In practice, maybe not use it, but good for evaluation
+        kfold = KFold(n_splits=10, shuffle=True, random_state=1)
+        cross_validation_results = cross_val_score(models[model], best_features, gestational_age,
+                                cv=kfold, scoring='neg_root_mean_squared_error')
 
-models['LinearReg'] = LinearRegression()
-models['LinearReg_Normalized'] = LinearRegression(normalize=True)
-for a in alpha_values:
-    models['LinearRegression_Ridge_Alpha=' + str(a)] = Ridge(alpha=a, max_iter=max_iters)
-    models['LinearRegression_Ridge_Normalized_Alpha=' + str(a)] = Ridge(alpha=a, max_iter=max_iters, normalize=True)
-    models['LinearRegression_Lasso_Alpha=' + str(a)] = Lasso(alpha=a, max_iter=max_iters)
-    models['LinearRegression_Lasso_Normalized_Alpha=' + str(a)] = Lasso(alpha=a, max_iter=max_iters, normalize=True)
+        rmse = np.mean(np.abs(cross_validation_results))
+        output_dataframe.loc[-1] = [model] + [rmse]
+        output_dataframe.index += 1
 
-# Create output dataframe
-output_dataframe = pd.DataFrame(columns=['model', 'RMSE'])
+    # Sort by RMSE - best performing on top
+    output_dataframe = output_dataframe.sort_values(by=['RMSE'])
+    print(output_dataframe)
 
-# Train and validate
-for model in models:
-    # Split data - K-fold cross-validation
-    # random_state gives us the same split every time... In practice, maybe not use it, but good for evaluation
-    kfold = KFold(n_splits=10, shuffle=True, random_state=1)
-    cross_validation_results = cross_val_score(models[model], best_features, gestational_age,
-                               cv=kfold, scoring='neg_root_mean_squared_error')
+def validate_models(models, best_features, scaler, gestational_age, actual_result, testing_data):
+    # Testing all the models
 
-    rmse = np.mean(np.abs(cross_validation_results))
-    output_dataframe.loc[-1] = [model] + [rmse]
-    output_dataframe.index += 1
+    output_dataframe_validation = pd.DataFrame(columns=['model', 'RMSE'])
+    testing_data = testing_data.iloc[:, :-6]
 
-# Sort by RMSE - best performing on top
-output_dataframe = output_dataframe.sort_values(by=['RMSE'])
-print(output_dataframe)
+    for model in models:
+        models[model].fit(best_features, gestational_age)
+        print(model)
 
-#####################################################
-## Step 5 - Run best performing model on test data ##
-#####################################################
+        predictions = models[model].predict(scaler.transform(testing_data))
 
-# Testing all the models
+        prediction_dataframe = pd.DataFrame(columns=['Predictions'])
+        prediction_dataframe.index += 367
+        for outcome in predictions:
+            prediction_dataframe.loc[-1] = [outcome]
+            prediction_dataframe.index += 1
 
-output_dataframe_validation = pd.DataFrame(columns=['model', 'RMSE'])
-testing_data = testing_data.iloc[:, :-6]
+        rmse = np.sqrt(((prediction_dataframe.to_numpy() - actual_result.to_numpy()) ** 2).mean())
+        output_dataframe_validation.loc[-1] = [model] + [rmse]
+        output_dataframe_validation.index += 1
 
-for model in models:
-    models[model].fit(best_features, gestational_age)
-    print(model)
+    output_dataframe_validation = output_dataframe_validation.sort_values(by=['RMSE'])
+    print(output_dataframe_validation)
 
-    predictions = models[model].predict(scaler.transform(testing_data))
+def main():
+    full_dataframe = read_data()
+    gestational_age, actual_result, testing_data, all_features = strip_features(full_dataframe)
 
-    prediction_dataframe = pd.DataFrame(columns=['Predictions'])
-    prediction_dataframe.index += 367
-    for outcome in predictions:
-        prediction_dataframe.loc[-1] = [outcome]
-        prediction_dataframe.index += 1
+    models = define_models()
 
-    rmse = np.sqrt(((prediction_dataframe.to_numpy() - actual_result.to_numpy()) ** 2).mean())
-    output_dataframe_validation.loc[-1] = [model] + [rmse]
-    output_dataframe_validation.index += 1
+    for k_best_value in k_best_values:
+        scaler, best_features = select_best_features(all_features, gestational_age, k_best_value)
+        print(f"Running evaluation and validation for K value: {k_best_value}")
+        # evaluate_models(models, best_features, gestational_age, actual_result, all_features, k_best_value)
+        # validate_models(models, best_features, scaler, gestational_age, actual_result, testing_data)
+        print("-------------------------------------------------")
 
-output_dataframe_validation = output_dataframe_validation.sort_values(by=['RMSE'])
-print(output_dataframe_validation)
+if __name__ == "__main__":
+    main()
